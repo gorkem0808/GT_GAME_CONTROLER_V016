@@ -10,7 +10,7 @@ if(NOT DEFINED PICO_SDK_PATH)
 endif()
 include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
-project(gt_game_controler_3pico_v015 C CXX ASM)
+project(gt_game_controler_3pico_v019 C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 

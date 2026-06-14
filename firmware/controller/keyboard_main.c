@@ -39,11 +39,11 @@ typedef struct {
 #define KEY_K 0x0E
 
 #define PIN_P1_TRIGGER 7
-#define PIN_P1_COIN    17
+#define DEFAULT_P1_COIN_PIN 17
 #define PIN_P2_TRIGGER 11
-#define PIN_P2_COIN    21
-#define PIN_P1_RELAY   26
-#define PIN_P2_RELAY   27
+#define DEFAULT_P2_COIN_PIN 21
+#define DEFAULT_P1_RELAY_PIN 26
+#define DEFAULT_P2_RELAY_PIN 27
 
 #define INACTIVE_TIMEOUT_MS 180000u
 #define RELAY_TEST_MS 1000u
@@ -59,9 +59,12 @@ typedef struct __attribute__((packed)) {
     uint8_t relay_active_low;       // 0=ACTIVE HIGH, 1=ACTIVE LOW
     uint8_t p1_coin_active_high;    // 0=DRY/GND active, 1=3.3V pulse active
     uint8_t p2_coin_active_high;
-    uint8_t reserved0;
+    uint8_t p1_relay_pin;
+    uint8_t p2_relay_pin;
+    uint8_t p1_coin_pin;
+    uint8_t p2_coin_pin;
     uint8_t keymap[21];
-    uint8_t reserved[31];
+    uint8_t reserved[28];
 } config_t;
 
 static const key_pin_t pins[] = {
@@ -114,12 +117,18 @@ static void default_config(void) {
     cfg.relay_active_low = 0;
     cfg.p1_coin_active_high = 0;
     cfg.p2_coin_active_high = 0;
+    cfg.p1_relay_pin = DEFAULT_P1_RELAY_PIN;
+    cfg.p2_relay_pin = DEFAULT_P2_RELAY_PIN;
+    cfg.p1_coin_pin = DEFAULT_P1_COIN_PIN;
+    cfg.p2_coin_pin = DEFAULT_P2_COIN_PIN;
     for (uint i = 0; i < PIN_COUNT; i++) cfg.keymap[i] = pins[i].default_key;
 }
 
 static bool config_valid(const config_t *c) {
     if (c->magic != CONFIG_MAGIC) return false;
     if (c->relay_active_low > 1 || c->p1_coin_active_high > 1 || c->p2_coin_active_high > 1) return false;
+    if (c->p1_relay_pin > 28 || c->p2_relay_pin > 28) return false;
+    if (c->p1_coin_pin > 28 || c->p2_coin_pin > 28) return false;
     return true;
 }
 
@@ -143,14 +152,21 @@ static bool raw_low(uint pin) {
     return gpio_get(pin) == 0;
 }
 
-static bool coin_pressed(uint pin) {
-    if (pin == PIN_P1_COIN) return cfg.p1_coin_active_high ? (gpio_get(pin) != 0) : raw_low(pin);
-    if (pin == PIN_P2_COIN) return cfg.p2_coin_active_high ? (gpio_get(pin) != 0) : raw_low(pin);
-    return raw_low(pin);
+static bool pin_active(uint pin, bool active_high) {
+    return active_high ? (gpio_get(pin) != 0) : raw_low(pin);
+}
+
+static bool p1_coin_pressed(void) {
+    return pin_active(cfg.p1_coin_pin, cfg.p1_coin_active_high != 0);
+}
+
+static bool p2_coin_pressed(void) {
+    return pin_active(cfg.p2_coin_pin, cfg.p2_coin_active_high != 0);
 }
 
 static bool pressed_pin(uint pin) {
-    if (pin == PIN_P1_COIN || pin == PIN_P2_COIN) return coin_pressed(pin);
+    if (pin == cfg.p1_coin_pin) return p1_coin_pressed();
+    if (pin == cfg.p2_coin_pin) return p2_coin_pressed();
     return raw_low(pin);
 }
 
@@ -161,29 +177,38 @@ static void relay_write(uint pin, bool on) {
 
 static void set_p1_relay(bool on) {
     p1_relay_on = on;
-    relay_write(PIN_P1_RELAY, on);
+    relay_write(cfg.p1_relay_pin, on);
 }
 
 static void set_p2_relay(bool on) {
     p2_relay_on = on;
-    relay_write(PIN_P2_RELAY, on);
+    relay_write(cfg.p2_relay_pin, on);
+}
+
+static void configure_one_input(uint pin, bool active_high) {
+    if (pin == cfg.p1_relay_pin || pin == cfg.p2_relay_pin) return;
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_IN);
+    if (active_high) gpio_pull_down(pin);
+    else gpio_pull_up(pin);
 }
 
 static void configure_inputs(void) {
     for (uint i = 0; i < PIN_COUNT; i++) {
-        gpio_init(pins[i].pin);
-        gpio_set_dir(pins[i].pin, GPIO_IN);
-        if (pins[i].pin == PIN_P1_COIN && cfg.p1_coin_active_high) gpio_pull_down(pins[i].pin);
-        else if (pins[i].pin == PIN_P2_COIN && cfg.p2_coin_active_high) gpio_pull_down(pins[i].pin);
-        else gpio_pull_up(pins[i].pin);
+        if (pins[i].pin == cfg.p1_coin_pin) configure_one_input(pins[i].pin, cfg.p1_coin_active_high != 0);
+        else if (pins[i].pin == cfg.p2_coin_pin) configure_one_input(pins[i].pin, cfg.p2_coin_active_high != 0);
+        else configure_one_input(pins[i].pin, false);
     }
+    // Coin pini tuş listesinde olmasa bile ayrıca input olarak hazırlanır.
+    configure_one_input(cfg.p1_coin_pin, cfg.p1_coin_active_high != 0);
+    configure_one_input(cfg.p2_coin_pin, cfg.p2_coin_active_high != 0);
 }
 
 static void configure_relays(void) {
-    gpio_init(PIN_P1_RELAY);
-    gpio_init(PIN_P2_RELAY);
-    gpio_set_dir(PIN_P1_RELAY, GPIO_OUT);
-    gpio_set_dir(PIN_P2_RELAY, GPIO_OUT);
+    gpio_init(cfg.p1_relay_pin);
+    gpio_init(cfg.p2_relay_pin);
+    gpio_set_dir(cfg.p1_relay_pin, GPIO_OUT);
+    gpio_set_dir(cfg.p2_relay_pin, GPIO_OUT);
     set_p1_relay(false);
     set_p2_relay(false);
 }
@@ -200,8 +225,9 @@ static const char *p2_coin_text(void) { return cfg.p2_coin_active_high ? "HIGH" 
 
 static void send_config(void) {
     char buf[192];
-    snprintf(buf, sizeof(buf), "CONFIG,RELAY,%s,P1COIN,%s,P2COIN,%s,RELAYPINS,%u,%u\n",
-             relay_mode_text(), p1_coin_text(), p2_coin_text(), PIN_P1_RELAY, PIN_P2_RELAY);
+    snprintf(buf, sizeof(buf), "CONFIG,RELAY,%s,P1COIN,%s,P2COIN,%s,RELAYPINS,%u,%u,COINPINS,%u,%u,TIMEOUT,%u\n",
+             relay_mode_text(), p1_coin_text(), p2_coin_text(),
+             cfg.p1_relay_pin, cfg.p2_relay_pin, cfg.p1_coin_pin, cfg.p2_coin_pin, INACTIVE_TIMEOUT_MS/1000u);
     cdc_write(buf);
 }
 
@@ -222,10 +248,10 @@ static void send_status(void) {
     for (uint i = 0; i < PIN_COUNT && n < (int)sizeof(buf)-80; i++) {
         n += snprintf(buf+n, sizeof(buf)-n, ",%u:%d", pins[i].pin, pressed_pin(pins[i].pin) ? 1 : 0);
     }
-    snprintf(buf+n, sizeof(buf)-n, ",RELAYS,%u:%d,%u:%d,ACTIVE,P1:%d,P2:%d,CFG,RELAY:%s,P1COIN:%s,P2COIN:%s\n",
-             PIN_P1_RELAY, p1_relay_on ? 1 : 0, PIN_P2_RELAY, p2_relay_on ? 1 : 0,
+    snprintf(buf+n, sizeof(buf)-n, ",RELAYS,%u:%d,%u:%d,ACTIVE,P1:%d,P2:%d,CFG,RELAY:%s,P1COIN:%s,P2COIN:%s,COINPINS:%u:%u\n",
+             cfg.p1_relay_pin, p1_relay_on ? 1 : 0, cfg.p2_relay_pin, p2_relay_on ? 1 : 0,
              p1_game_active ? 1 : 0, p2_game_active ? 1 : 0,
-             relay_mode_text(), p1_coin_text(), p2_coin_text());
+             relay_mode_text(), p1_coin_text(), p2_coin_text(), cfg.p1_coin_pin, cfg.p2_coin_pin);
     cdc_write(buf);
 }
 
@@ -240,12 +266,24 @@ static bool is_low_word(const char *s) {
 static void handle_setcfg(char *line) {
     // Formats:
     // SETCFG,HIGH,DRY,HIGH
-    // SETCFG,LOW,DRY,DRY
+    // SETCFG,LOW,DRY,DRY,26,27
+    // SETCFG,HIGH,DRY,DRY,26,27,3,21  -> p1 relay, p2 relay, p1 coin, p2 coin
     char a[16] = {0}, b[16] = {0}, c[16] = {0};
-    if (sscanf(line + 7, "%15[^,],%15[^,],%15s", a, b, c) == 3) {
+    unsigned p1rp = cfg.p1_relay_pin, p2rp = cfg.p2_relay_pin;
+    unsigned p1cp = cfg.p1_coin_pin,  p2cp = cfg.p2_coin_pin;
+    int got = sscanf(line + 7, "%15[^,],%15[^,],%15[^,],%u,%u,%u,%u", a, b, c, &p1rp, &p2rp, &p1cp, &p2cp);
+    if (got >= 3) {
         if (is_low_word(a)) cfg.relay_active_low = 1; else cfg.relay_active_low = 0;
         cfg.p1_coin_active_high = is_high_word(b) ? 1 : 0;
         cfg.p2_coin_active_high = is_high_word(c) ? 1 : 0;
+        if (got >= 5 && p1rp <= 28 && p2rp <= 28 && p1rp != p2rp) {
+            cfg.p1_relay_pin = (uint8_t)p1rp;
+            cfg.p2_relay_pin = (uint8_t)p2rp;
+        }
+        if (got >= 7 && p1cp <= 28 && p2cp <= 28) {
+            cfg.p1_coin_pin = (uint8_t)p1cp;
+            cfg.p2_coin_pin = (uint8_t)p2cp;
+        }
         configure_inputs();
         configure_relays();
         save_config();
@@ -273,6 +311,24 @@ static void handle_setkey(char *line) {
     }
 }
 
+static void handle_pin_cmd(char *line) {
+    unsigned player = 0, pin = 0;
+    int offset = (strncmp(line, "RELAYPIN,", 9) == 0) ? 9 : 8;
+    if (sscanf(line + offset, "%u,%u", &player, &pin) == 2 && pin <= 28) {
+        bool is_coin = (strncmp(line, "COINPIN,", 8) == 0);
+        if (!is_coin && player == 1) cfg.p1_relay_pin = (uint8_t)pin;
+        else if (!is_coin && player == 2) cfg.p2_relay_pin = (uint8_t)pin;
+        else if (is_coin && player == 1) cfg.p1_coin_pin = (uint8_t)pin;
+        else if (is_coin && player == 2) cfg.p2_coin_pin = (uint8_t)pin;
+        else { cdc_write("ERR,PIN_PLAYER\n"); return; }
+        configure_inputs();
+        configure_relays();
+        save_config();
+        cdc_write("OK,PIN\n");
+        send_config();
+    } else cdc_write("ERR,PIN_FORMAT\n");
+}
+
 static void handle_relay(char *line) {
     unsigned player = 0, state = 1;
     if (strncmp(line, "RELAYTEST,", 10) == 0) {
@@ -292,7 +348,7 @@ static void handle_relay(char *line) {
 
 static void handle_line(char *line) {
     if (strcmp(line, "PING") == 0) {
-        cdc_write("HELLO,KEYBOARD,GT_GAME_CONTROLER_CONTROLLER,V015\n");
+        cdc_write("HELLO,KEYBOARD,GT_GAME_CONTROLER_CONTROLLER,V020\n");
     } else if (strcmp(line, "GET") == 0) {
         send_status();
     } else if (strcmp(line, "GETCFG") == 0) {
@@ -303,6 +359,8 @@ static void handle_line(char *line) {
         handle_setcfg(line);
     } else if (strncmp(line, "SETKEY,", 7) == 0) {
         handle_setkey(line);
+    } else if (strncmp(line, "RELAYPIN,", 9) == 0 || strncmp(line, "COINPIN,", 8) == 0) {
+        handle_pin_cmd(line);
     } else if (strncmp(line, "RELAYTEST,", 10) == 0 || strncmp(line, "RELAY,", 6) == 0) {
         handle_relay(line);
     } else if (strcmp(line, "RESETCFG") == 0) {
@@ -349,8 +407,8 @@ static void send_keyboard_report(void) {
 
 static void update_relay_logic(void) {
     uint32_t now = ms_now();
-    bool p1_coin = coin_pressed(PIN_P1_COIN);
-    bool p2_coin = coin_pressed(PIN_P2_COIN);
+    bool p1_coin = p1_coin_pressed();
+    bool p2_coin = p2_coin_pressed();
     bool p1_trigger = raw_low(PIN_P1_TRIGGER);
     bool p2_trigger = raw_low(PIN_P2_TRIGGER);
 
