@@ -1,0 +1,14 @@
+GT GAME CONTROLER V019 KISA KURULUM
+
+Düzeltme:
+- P1 coin GP3 seçilip kaydedilince tekrar GP17'ye dönme hatası düzeltildi.
+- Gri kutucuklarda yazı görünmeme hatası düzeltildi.
+
+Kurulum:
+1) ZIP'i tamamen klasöre çıkar.
+2) GitHub'a tüm klasörü yükle.
+3) .github/workflows/build_uf2.yml doğru yerde olmalı.
+4) Eylemler / Actions -> Build GT GAME CONTROLER V019 UF2 çalıştır.
+5) Yeşil tikten sonra Artifacts/Yapıtlar ZIP'ini indir.
+6) Controller Pico'ya yeni controller.uf2 yükle.
+7) GT_GAME_CONTROLER_v019.bat çalıştır.
