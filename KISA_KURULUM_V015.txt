@@ -1,0 +1,17 @@
+GT GAME CONTROLER V015 KISA KURULUM
+
+Bu pakette controller.uf2 hazır verilmedi. Çünkü önceki denemelerde eski UF2 üstüne yama güvenilir olmadı.
+Gerçek çözüm kaynak koddan temiz derlemedir.
+
+UF2 üretmek için:
+1) GitHub'da yeni repository aç.
+2) ZIP içindeki tüm klasörleri repository içine yükle.
+3) GitHub > Actions > Build GT GAME CONTROLER V015 UF2 > Run workflow.
+4) İş bitince Artifacts kısmından ZIP indir.
+5) İçinden çıkan controller.uf2 dosyasını Controller Pico'ya yükle.
+
+Bağlantı:
+P1 röle GP26, P2 röle GP27.
+P1 tetik GP7, P1 coin GP17.
+P2 tetik GP11, P2 coin GP21.
+Mouse aktif/pasif Piko1 ve Piko2 üzerinde GP19.
