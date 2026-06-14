@@ -1,0 +1,14 @@
+DIREKT LINKLER
+
+GitHub yükleme linki:
+https://github.com/gorkem0808/GT_GAME_CONTROLER_V016/upload/main
+
+GitHub derleme / Actions linki:
+https://github.com/gorkem0808/GT_GAME_CONTROLER_V016/actions/workflows/build_uf2.yml
+
+Yapılacak:
+1. Bu ZIP'i tamamen çıkar.
+2. İçindeki bütün dosya ve klasörleri yükleme linkine sürükle.
+3. Eylemler linkinden workflow çalıştır.
+4. Yeşil tikten sonra Yapıtlar / Artifacts ZIP'ini indir.
+5. İçinden controller.uf2 dosyasını Controller Pico'ya yükle.
