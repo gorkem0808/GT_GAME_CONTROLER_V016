@@ -1,0 +1,49 @@
+name: Build GT GAME CONTROLER V015 UF2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential git
+
+      - name: Checkout Pico SDK
+        run: |
+          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git
+          cd pico-sdk
+          git submodule update --init --recursive
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja -DPICO_SDK_PATH=$PWD/pico-sdk -DPICO_BOARD=pico
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Prepare UF2 package
+        run: |
+          mkdir -p artifact
+          cp build/piko1.uf2 artifact/piko1.uf2
+          cp build/piko2.uf2 artifact/piko2.uf2
+          cp build/controller.uf2 artifact/controller.uf2
+          cp gt_game_controler_v015.py artifact/gt_game_controler_v015.py
+          cp GT_GAME_CONTROLER_v015.bat artifact/GT_GAME_CONTROLER_v015.bat
+          cp requirements.txt artifact/requirements.txt
+          cp README_GT_GAME_CONTROLER_v015_TR.md artifact/README_GT_GAME_CONTROLER_v015_TR.md
+          cd artifact && zip -r ../GT_GAME_CONTROLER_3PICO_v015_UF2_READY.zip .
+
+      - name: Upload UF2 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GT_GAME_CONTROLER_3PICO_v015_UF2_READY
+          path: GT_GAME_CONTROLER_3PICO_v015_UF2_READY.zip
